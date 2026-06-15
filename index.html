@@ -648,15 +648,33 @@
     // === SUMMARY ===
     const totalAdd = spec.files.reduce((a, f) => a + f[1], 0);
     const totalDel = spec.files.reduce((a, f) => a + f[2], 0);
+
+    // Realistic token breakdown for an agentic Claude Code session: the bulk
+    // is cache reads (the large context re-processed every tool turn), a
+    // slice is fresh input, and only a few % is generated output. Cost uses
+    // real Opus 4.8 rates — $5/M input, $25/M output, $0.50/M cache read.
+    const RATE_IN = 5 / 1e6, RATE_OUT = 25 / 1e6, RATE_CACHE = 0.5 / 1e6;
+    const outShare   = rnd(0.03, 0.05);
+    const cacheShare = rnd(0.82, 0.88) * (1 - outShare);
+    const out   = Math.round(totalTok * outShare);
+    const cache = Math.round(totalTok * cacheShare);
+    const inTok = totalTok - out - cache;
+    const cost  = inTok * RATE_IN + out * RATE_OUT + cache * RATE_CACHE;
+    const fmtTok = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + "M"
+                        : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : fmtNum(n);
+
     const box = document.createElement("div");
     box.className = "summary-box";
     box.innerHTML =
       `<div class="row"><span class="k">● Task complete</span><span class="v accent bold">${spec.title}</span></div>` +
       `<div class="row"><span class="k">  Duration</span><span class="v">${fmtTime(totalSec)}</span></div>` +
-      `<div class="row"><span class="k">  Tokens used</span><span class="v">${fmtNum(totalTok)} <span class="dim">(${fmtNum(Math.round(totalTok*0.82))} in · ${fmtNum(Math.round(totalTok*0.18))} out)</span></span></div>` +
+      `<div class="row"><span class="k">  Tokens used</span><span class="v">${fmtNum(totalTok)}</span></div>` +
+      `<div class="row"><span class="k">  ↳ cache read</span><span class="v dim">${fmtTok(cache)} <span class="dim">· $${(cache*RATE_CACHE).toFixed(2)}</span></span></div>` +
+      `<div class="row"><span class="k">  ↳ input</span><span class="v dim">${fmtTok(inTok)} <span class="dim">· $${(inTok*RATE_IN).toFixed(2)}</span></span></div>` +
+      `<div class="row"><span class="k">  ↳ output</span><span class="v dim">${fmtTok(out)} <span class="dim">· $${(out*RATE_OUT).toFixed(2)}</span></span></div>` +
       `<div class="row"><span class="k">  Files changed</span><span class="v">${spec.files.length} <span class="add">+${totalAdd}</span> <span class="del">-${totalDel}</span></span></div>` +
       `<div class="row"><span class="k">  Tests</span><span class="v test-pass">${passed}/${passed} passing ✓</span></div>` +
-      `<div class="row"><span class="k">  Cost</span><span class="v">$${(totalTok/1e6*7.5).toFixed(2)}</span></div>`;
+      `<div class="row"><span class="k">  Cost</span><span class="v accent bold">$${cost.toFixed(2)} <span class="dim">· opus-4-8</span></span></div>`;
     raw(box);
 
     el("line dim", `Type <span class="bold accent">build next</span> to implement the next spec → <span class="muted">${SPECS[(specIndex+1)%SPECS.length].title}</span>`);
