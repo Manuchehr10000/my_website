@@ -560,10 +560,13 @@
 
     await sleep(380);
 
-    // Budget allocation across phases (compress the real-time animation so
-    // it never drags: long budgets still animate in a lively few seconds,
-    // but the REPORTED time/tokens match exactly what you entered).
-    const animTotal = Math.min(Math.max(totalSec, 5), 26) * 1000; // wall-clock anim
+    // Run in REAL TIME — the animation lasts as long as the entered budget so
+    // the recording shows genuine elapsed time (no fast-forward). A small fixed
+    // overhead is reserved for the typing / tool-call / test-result animations
+    // so the grand total lands on the entered duration. The on-screen clock
+    // reaches exactly the entered time as the final phase ends.
+    const FIXED_OVERHEAD_MS = 9000;
+    const animTotal = Math.max(totalSec * 1000 - FIXED_OVERHEAD_MS, 4000);
     const wThink = 0.18, wPlan = 0.17, wExplore = 0.20, wBuild = 0.33, wTest = 0.12;
 
     const clock = {
