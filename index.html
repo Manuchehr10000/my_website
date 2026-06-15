@@ -259,6 +259,28 @@
   .run-btn:hover { background: var(--accent-soft); }
   .run-btn:disabled { opacity: 0.5; cursor: default; }
 
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    overflow: hidden;
+    background: #14100b;
+  }
+  .seg-btn {
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    padding: 7px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+  .seg-btn.active { background: var(--accent); color: #1a120d; font-weight: 700; }
+  .seg-btn:not(.active):hover { color: var(--fg); }
+  .seg.disabled { opacity: 0.5; pointer-events: none; }
+
   .statusline {
     display: flex;
     gap: 16px;
@@ -290,6 +312,10 @@
           <input id="tokens" type="text" value="48200" />
         </div>
         <button class="run-btn" id="run">▶ Run task</button>
+        <div class="seg" id="mode" role="group" aria-label="Animation speed">
+          <button class="seg-btn active" data-mode="real">⏱ Real&nbsp;time</button>
+          <button class="seg-btn" data-mode="quick">⚡ Quick</button>
+        </div>
         <span class="hint">type a prompt &amp; Enter below · or "build next"</span>
       </div>
     </div>
@@ -332,93 +358,136 @@
 
   let running = false;
   let specIndex = 0;
+  let realTime = true;   // ⏱ real time (honor entered duration) vs ⚡ quick anim
+
+  // ---- Real-time / Quick toggle -----------------------------------------
+  const modeGroup = document.getElementById("mode");
+  modeGroup.querySelectorAll(".seg-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (running) return; // locked while a task runs
+      realTime = btn.dataset.mode === "real";
+      modeGroup.querySelectorAll(".seg-btn").forEach((b) =>
+        b.classList.toggle("active", b === btn));
+    });
+  });
 
   // ---- The roadmap of "specs" the agent builds, one per run -------------
+  //  Fictional database-optimization initiative — each spec is a gnarly,
+  //  multi-system performance project.
   const SPECS = [
     {
-      title: "User authentication with email magic links",
+      id: "DBX-2041",
+      title: "Cost-based query planner with adaptive join reordering",
       files: [
-        ["src/auth/magicLink.ts", 86, 0],
-        ["src/auth/session.ts", 41, 7],
-        ["src/routes/login.tsx", 58, 12],
-        ["src/db/migrations/0007_tokens.sql", 19, 0],
+        ["engine/planner/costModel.rs", 214, 0],
+        ["engine/planner/joinReorder.rs", 168, 23],
+        ["engine/planner/cardinalityEstimator.rs", 132, 0],
+        ["engine/catalog/statistics.rs", 77, 14],
+        ["bench/planner_tpch.rs", 96, 0],
       ],
       plan: [
-        "Add a single-use token table + 15-minute expiry",
-        "Generate signed magic links and send via the mailer",
-        "Verify token on callback, mint a session cookie",
-        "Wire the login form to the new endpoint",
+        "Build a histogram + most-common-value cardinality estimator",
+        "Implement a dynamic-programming join-order search (DPccp)",
+        "Add a cost model weighting I/O, CPU, and network shuffles",
+        "Fall back to greedy reordering past 12-way joins",
+        "Validate plan stability against the TPC-H query set",
       ],
-      tests: [ "auth/magicLink.test.ts", "auth/session.test.ts", "routes/login.test.tsx" ],
-      testCount: 24,
+      tests: [ "planner/costModel.test.rs", "planner/joinReorder.test.rs", "planner/cardinality.test.rs" ],
+      testCount: 41,
     },
     {
-      title: "Rate limiting middleware (token bucket, per-IP)",
+      id: "DBX-2044",
+      title: "MVCC garbage collection with adaptive vacuum scheduling",
       files: [
-        ["src/middleware/rateLimit.ts", 73, 0],
-        ["src/lib/tokenBucket.ts", 49, 0],
-        ["src/server.ts", 11, 3],
-        ["src/config/limits.ts", 22, 0],
+        ["engine/mvcc/gcWorker.rs", 187, 0],
+        ["engine/mvcc/visibilityMap.rs", 94, 31],
+        ["engine/mvcc/deadTupleTracker.rs", 121, 0],
+        ["engine/storage/heapPrune.rs", 68, 17],
       ],
       plan: [
-        "Implement an in-memory token-bucket with refill",
-        "Back it with Redis for multi-instance correctness",
-        "Expose middleware with configurable per-route limits",
-        "Return 429 + Retry-After headers on exhaustion",
+        "Track dead-tuple density per page in a visibility map",
+        "Schedule vacuum by churn rate, not a fixed interval",
+        "Add opportunistic HOT pruning on page access",
+        "Hold an xmin horizon to avoid removing visible versions",
       ],
-      tests: [ "lib/tokenBucket.test.ts", "middleware/rateLimit.test.ts" ],
-      testCount: 18,
+      tests: [ "mvcc/gcWorker.test.rs", "mvcc/visibility.test.rs", "mvcc/heapPrune.test.rs" ],
+      testCount: 36,
     },
     {
-      title: "Stripe billing webhooks & subscription sync",
+      id: "DBX-2048",
+      title: "Columnar storage engine with zone maps & dictionary encoding",
       files: [
-        ["src/billing/webhooks.ts", 112, 0],
-        ["src/billing/subscriptions.ts", 64, 9],
-        ["src/db/migrations/0008_subs.sql", 27, 0],
-        ["src/routes/api/stripe.ts", 38, 2],
+        ["engine/columnar/segmentWriter.rs", 241, 0],
+        ["engine/columnar/zoneMap.rs", 103, 0],
+        ["engine/columnar/dictEncoder.rs", 156, 0],
+        ["engine/columnar/lateMaterialize.rs", 88, 9],
+        ["engine/exec/scanColumnar.rs", 119, 22],
       ],
       plan: [
-        "Verify Stripe signatures and dedupe by event id",
-        "Map checkout.session.completed → active subscription",
-        "Handle invoice.payment_failed and downgrade flow",
-        "Persist subscription state with an idempotent upsert",
+        "Encode columns with RLE + dictionary compression",
+        "Build per-segment zone maps (min/max/null counts)",
+        "Skip segments via zone-map predicate pruning",
+        "Defer row reconstruction with late materialization",
+        "Wire the vectorized scan operator into the executor",
       ],
-      tests: [ "billing/webhooks.test.ts", "billing/subscriptions.test.ts" ],
-      testCount: 31,
+      tests: [ "columnar/zoneMap.test.rs", "columnar/dictEncoder.test.rs", "exec/scanColumnar.test.rs" ],
+      testCount: 53,
     },
     {
-      title: "Full-text search over documents (Postgres tsvector)",
+      id: "DBX-2052",
+      title: "Distributed predicate pushdown & partition-aware shuffle",
       files: [
-        ["src/search/index.ts", 94, 0],
-        ["src/search/query.ts", 57, 0],
-        ["src/db/migrations/0009_search.sql", 33, 0],
-        ["src/routes/api/search.ts", 45, 6],
+        ["engine/distributed/pushdown.rs", 176, 0],
+        ["engine/distributed/partitionRouter.rs", 142, 18],
+        ["engine/distributed/exchangeOp.rs", 131, 27],
+        ["engine/planner/rewriteRules.rs", 64, 11],
       ],
       plan: [
-        "Add a generated tsvector column + GIN index",
-        "Build a ranked query with websearch_to_tsquery",
-        "Add highlight snippets via ts_headline",
-        "Expose a debounced /api/search endpoint",
+        "Push filters and projections below the exchange operator",
+        "Co-locate joins on matching partition keys to skip shuffle",
+        "Add a broadcast vs. repartition cost decision",
+        "Prune partitions from constant-folded predicates",
       ],
-      tests: [ "search/query.test.ts", "search/index.test.ts", "routes/search.test.ts" ],
-      testCount: 27,
+      tests: [ "distributed/pushdown.test.rs", "distributed/partitionRouter.test.rs", "distributed/exchange.test.rs" ],
+      testCount: 47,
     },
     {
-      title: "Realtime presence with WebSockets",
+      id: "DBX-2057",
+      title: "Write-ahead log group commit with parallel fsync batching",
       files: [
-        ["src/realtime/presence.ts", 101, 0],
-        ["src/realtime/socket.ts", 72, 14],
-        ["src/hooks/usePresence.ts", 48, 0],
-        ["src/server.ts", 16, 4],
+        ["engine/wal/groupCommit.rs", 158, 0],
+        ["engine/wal/logBuffer.rs", 96, 24],
+        ["engine/wal/fsyncScheduler.rs", 113, 0],
+        ["engine/recovery/replay.rs", 71, 13],
       ],
       plan: [
-        "Track connected clients in a presence registry",
-        "Broadcast join/leave with a heartbeat timeout",
-        "Reconcile state on reconnect with a version vector",
-        "Add a usePresence() hook for the client",
+        "Coalesce concurrent commits into a single fsync batch",
+        "Add a leader/follower group-commit handoff",
+        "Pipeline log-buffer writes against the fsync queue",
+        "Verify crash recovery replays batched records in order",
       ],
-      tests: [ "realtime/presence.test.ts", "realtime/socket.test.ts" ],
-      testCount: 22,
+      tests: [ "wal/groupCommit.test.rs", "wal/fsyncScheduler.test.rs", "recovery/replay.test.rs" ],
+      testCount: 38,
+    },
+    {
+      id: "DBX-2063",
+      title: "Adaptive buffer pool with ML-driven page eviction",
+      files: [
+        ["engine/buffer/poolManager.rs", 203, 0],
+        ["engine/buffer/evictPolicy.rs", 147, 29],
+        ["engine/buffer/accessPredictor.rs", 134, 0],
+        ["engine/buffer/prefetcher.rs", 91, 0],
+        ["bench/buffer_ycsb.rs", 82, 0],
+      ],
+      plan: [
+        "Replace LRU with a cost-aware LRU-K eviction policy",
+        "Train a lightweight reuse-distance access predictor",
+        "Prefetch sequential and B-tree-descent page chains",
+        "Pin hot index roots against eviction pressure",
+        "Benchmark hit-rate gains on the YCSB workload",
+      ],
+      tests: [ "buffer/evictPolicy.test.rs", "buffer/accessPredictor.test.rs", "buffer/prefetcher.test.rs" ],
+      testCount: 44,
     },
   ];
 
@@ -537,6 +606,7 @@
     running = true;
     runBtn.disabled = true;
     cmdInput.disabled = true;
+    modeGroup.classList.add("disabled");
     stStatus.textContent = "● working";
 
     const totalSec = parseTime(timeIn.value);
@@ -549,24 +619,27 @@
     if (!promptText) {
       promptText = isBuildNext
         ? "build next"
-        : `Implement: ${spec.title}`;
+        : `Implement ${spec.id}: ${spec.title}`;
     }
     const um = el("user-msg", `<span class="prompt-mark">&gt;</span> `);
     await typeInto(um, promptText, 10);
 
     if (isBuildNext || /build next/i.test(promptText)) {
-      el("line muted", `Picking up the next item on the roadmap → <span class="accent">${spec.title}</span>`);
+      el("line muted", `Picking up the next item on the roadmap → <span class="accent">${spec.id}</span> <span class="muted">${spec.title}</span>`);
     }
 
     await sleep(380);
 
-    // Run in REAL TIME — the animation lasts as long as the entered budget so
-    // the recording shows genuine elapsed time (no fast-forward). A small fixed
-    // overhead is reserved for the typing / tool-call / test-result animations
-    // so the grand total lands on the entered duration. The on-screen clock
-    // reaches exactly the entered time as the final phase ends.
+    // Animation duration. In ⏱ Real-time mode the animation lasts as long as
+    // the entered budget so a recording shows genuine elapsed time (no
+    // fast-forward); a small fixed overhead is reserved for the typing /
+    // tool-call / test animations so the grand total lands on the entered
+    // duration. In ⚡ Quick mode long budgets are compressed to a lively few
+    // seconds — the REPORTED time/tokens still match what you entered.
     const FIXED_OVERHEAD_MS = 9000;
-    const animTotal = Math.max(totalSec * 1000 - FIXED_OVERHEAD_MS, 4000);
+    const animTotal = realTime
+      ? Math.max(totalSec * 1000 - FIXED_OVERHEAD_MS, 4000)
+      : Math.min(Math.max(totalSec, 5), 26) * 1000;
     const wThink = 0.18, wPlan = 0.17, wExplore = 0.20, wBuild = 0.33, wTest = 0.12;
 
     const clock = {
@@ -669,7 +742,7 @@
     const box = document.createElement("div");
     box.className = "summary-box";
     box.innerHTML =
-      `<div class="row"><span class="k">● Task complete</span><span class="v accent bold">${spec.title}</span></div>` +
+      `<div class="row"><span class="k">● Task complete</span><span class="v accent bold">${spec.id} — ${spec.title}</span></div>` +
       `<div class="row"><span class="k">  Duration</span><span class="v">${fmtTime(totalSec)}</span></div>` +
       `<div class="row"><span class="k">  Tokens used</span><span class="v">${fmtNum(totalTok)}</span></div>` +
       `<div class="row"><span class="k">  ↳ cache read</span><span class="v dim">${fmtTok(cache)} <span class="dim">· $${(cache*RATE_CACHE).toFixed(2)}</span></span></div>` +
@@ -680,7 +753,8 @@
       `<div class="row"><span class="k">  Cost</span><span class="v accent bold">$${cost.toFixed(2)} <span class="dim">· opus-4-8</span></span></div>`;
     raw(box);
 
-    el("line dim", `Type <span class="bold accent">build next</span> to implement the next spec → <span class="muted">${SPECS[(specIndex+1)%SPECS.length].title}</span>`);
+    const nextSpec = SPECS[(specIndex + 1) % SPECS.length];
+    el("line dim", `Type <span class="bold accent">build next</span> to implement the next spec → <span class="accent">${nextSpec.id}</span> <span class="muted">${nextSpec.title}</span>`);
 
     // Advance roadmap + update status.
     specIndex++;
@@ -691,6 +765,7 @@
     running = false;
     runBtn.disabled = false;
     cmdInput.disabled = false;
+    modeGroup.classList.remove("disabled");
     cmdInput.focus();
   }
 
