@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Claude Code — Simulator</title>
+<style>
+  :root {
+    --bg: #16110d;
+    --panel: #1c1611;
+    --fg: #e8e2d8;
+    --muted: #9c9286;
+    --dim: #6f665b;
+    --accent: #d97757;     /* Claude clay/terracotta */
+    --accent-soft: #e8a07f;
+    --green: #6cc08b;
+    --blue: #6fa8dc;
+    --yellow: #e0c06a;
+    --purple: #b48ead;
+    --border: #2c241d;
+    --selection: rgba(217, 119, 87, 0.25);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: radial-gradient(1200px 700px at 70% -10%, #241a13 0%, var(--bg) 60%);
+    color: var(--fg);
+    font-family: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", ui-monospace, monospace;
+    font-size: 14px;
+    line-height: 1.55;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+  }
+
+  ::selection { background: var(--selection); }
+
+  .terminal {
+    width: 100%;
+    max-width: 980px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 48px);
+    overflow: hidden;
+  }
+
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 14px;
+    background: linear-gradient(180deg, #221b15, #1a140f);
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.red { background: #ff5f57; }
+  .dot.yellow { background: #febc2e; }
+  .dot.green { background: #28c840; }
+  .titlebar .title {
+    flex: 1;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.3px;
+  }
+  .titlebar .badge {
+    font-size: 11px;
+    color: var(--accent-soft);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 7px;
+  }
+
+  .screen {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px 8px;
+    scroll-behavior: smooth;
+  }
+  .screen::-webkit-scrollbar { width: 10px; }
+  .screen::-webkit-scrollbar-thumb { background: #2e2620; border-radius: 6px; }
+  .screen::-webkit-scrollbar-track { background: transparent; }
+
+  .line { white-space: pre-wrap; word-break: break-word; }
+  .line + .line { margin-top: 1px; }
+
+  .muted { color: var(--muted); }
+  .dim { color: var(--dim); }
+  .green { color: var(--green); }
+  .blue { color: var(--blue); }
+  .yellow { color: var(--yellow); }
+  .purple { color: var(--purple); }
+  .accent { color: var(--accent); }
+  .bold { font-weight: 600; }
+
+  .welcome {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    background: linear-gradient(180deg, rgba(217,119,87,0.06), rgba(217,119,87,0.0));
+  }
+  .welcome .star { color: var(--accent); }
+  .welcome h1 {
+    font-size: 15px;
+    margin: 0 0 6px;
+    font-weight: 600;
+  }
+
+  .user-msg {
+    color: var(--fg);
+    margin: 14px 0 6px;
+  }
+  .user-msg .prompt-mark { color: var(--accent); font-weight: 700; }
+
+  .tool {
+    margin: 8px 0 2px;
+  }
+  .tool .mark { color: var(--accent); }
+  .tool .name { color: var(--fg); font-weight: 600; }
+  .tool .args { color: var(--muted); }
+  .tool-out {
+    color: var(--muted);
+    padding-left: 20px;
+    border-left: 1px solid var(--border);
+    margin-left: 4px;
+  }
+  .tool-out .ok { color: var(--green); }
+  .tool-out .add { color: var(--green); }
+  .tool-out .del { color: #d98a8a; }
+
+  .think {
+    color: var(--dim);
+    font-style: italic;
+    margin: 6px 0;
+  }
+
+  .spinner-line {
+    color: var(--accent);
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .spinner { display: inline-block; width: 1ch; }
+  .spinner-line .meta { color: var(--dim); font-style: normal; }
+
+  .summary-box {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 14px 0 6px;
+    background: rgba(108,192,139,0.05);
+  }
+  .summary-box .row { display: flex; gap: 8px; }
+  .summary-box .k { color: var(--muted); width: 150px; flex: none; }
+  .summary-box .v { color: var(--fg); }
+
+  .test-pass { color: var(--green); }
+  .test-fail { color: #d98a8a; }
+
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 1em;
+    background: var(--accent);
+    vertical-align: text-bottom;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Input bar */
+  .inputbar {
+    border-top: 1px solid var(--border);
+    background: #19130e;
+    padding: 12px 16px;
+  }
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    background: #14100b;
+    transition: border-color 0.15s;
+  }
+  .input-row:focus-within { border-color: var(--accent); }
+  .input-row .gt { color: var(--accent); font-weight: 700; }
+  #cmd {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 14px;
+  }
+  #cmd::placeholder { color: var(--dim); }
+
+  .controls {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .field input {
+    width: 86px;
+    background: #14100b;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 5px 8px;
+    outline: none;
+  }
+  .field input:focus { border-color: var(--accent); }
+  .field label { color: var(--dim); }
+
+  .hint { color: var(--dim); font-size: 11px; margin-left: auto; }
+
+  .run-btn {
+    background: var(--accent);
+    color: #1a120d;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .run-btn:hover { background: var(--accent-soft); }
+  .run-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .statusline {
+    display: flex;
+    gap: 16px;
+    color: var(--dim);
+    font-size: 11px;
+    margin-top: 9px;
+  }
+  .statusline .live { color: var(--accent-soft); }
+</style>
+</head>
+<body>
+  <div class="terminal">
+    <div class="titlebar">
+      <span class="dot red"></span>
+      <span class="dot yellow"></span>
+      <span class="dot green"></span>
+      <span class="title">claude — code — 80×24</span>
+      <span class="badge">claude-opus-4-8</span>
+    </div>
+
+    <div class="screen" id="screen">
+      <div class="welcome">
+        <h1><span class="star">✻</span> Welcome to <span class="accent">Claude Code</span></h1>
+        <div class="muted">  /help for help · /status for your current setup</div>
+        <div class="dim" style="margin-top:6px">  cwd: ~/projects/acme-platform  ·  model: claude-opus-4-8  ·  mode: accept edits</div>
+      </div>
+      <div class="line dim">Enter a <span class="accent">time budget</span> and <span class="accent">token budget</span> above, then press Run (or type a prompt below).</div>
+      <div class="line dim">Tip: after a build finishes, type <span class="bold accent">build next</span> to implement the next spec.</div>
+    </div>
+
+    <div class="inputbar">
+      <div class="controls">
+        <div class="field">
+          <label>⏱ time</label>
+          <input id="time" type="text" value="6m 12s" />
+        </div>
+        <div class="field">
+          <label>◇ tokens</label>
+          <input id="tokens" type="text" value="48200" />
+        </div>
+        <button class="run-btn" id="run">▶ Run task</button>
+        <span class="hint">type a prompt &amp; Enter · or "build next"</span>
+      </div>
+      <div class="input-row">
+        <span class="gt">&gt;</span>
+        <input id="cmd" type="text" autocomplete="off" spellcheck="false"
+               placeholder="Describe a task, or type 'build next'…" />
+      </div>
+      <div class="statusline">
+        <span id="st-model">⏵ claude-opus-4-8</span>
+        <span id="st-ctx">◇ context: 12% used</span>
+        <span id="st-status" class="live">● ready</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+
+  const screen   = document.getElementById("screen");
+  const cmdInput = document.getElementById("cmd");
+  const timeIn   = document.getElementById("time");
+  const tokensIn = document.getElementById("tokens");
+  const runBtn   = document.getElementById("run");
+  const stStatus = document.getElementById("st-status");
+  const stCtx    = document.getElementById("st-ctx");
+
+  let running = false;
+  let specIndex = 0;
+
+  // ---- The roadmap of "specs" the agent builds, one per run -------------
+  const SPECS = [
+    {
+      title: "User authentication with email magic links",
+      files: [
+        ["src/auth/magicLink.ts", 86, 0],
+        ["src/auth/session.ts", 41, 7],
+        ["src/routes/login.tsx", 58, 12],
+        ["src/db/migrations/0007_tokens.sql", 19, 0],
+      ],
+      plan: [
+        "Add a single-use token table + 15-minute expiry",
+        "Generate signed magic links and send via the mailer",
+        "Verify token on callback, mint a session cookie",
+        "Wire the login form to the new endpoint",
+      ],
+      tests: [ "auth/magicLink.test.ts", "auth/session.test.ts", "routes/login.test.tsx" ],
+      testCount: 24,
+    },
+    {
+      title: "Rate limiting middleware (token bucket, per-IP)",
+      files: [
+        ["src/middleware/rateLimit.ts", 73, 0],
+        ["src/lib/tokenBucket.ts", 49, 0],
+        ["src/server.ts", 11, 3],
+        ["src/config/limits.ts", 22, 0],
+      ],
+      plan: [
+        "Implement an in-memory token-bucket with refill",
+        "Back it with Redis for multi-instance correctness",
+        "Expose middleware with configurable per-route limits",
+        "Return 429 + Retry-After headers on exhaustion",
+      ],
+      tests: [ "lib/tokenBucket.test.ts", "middleware/rateLimit.test.ts" ],
+      testCount: 18,
+    },
+    {
+      title: "Stripe billing webhooks & subscription sync",
+      files: [
+        ["src/billing/webhooks.ts", 112, 0],
+        ["src/billing/subscriptions.ts", 64, 9],
+        ["src/db/migrations/0008_subs.sql", 27, 0],
+        ["src/routes/api/stripe.ts", 38, 2],
+      ],
+      plan: [
+        "Verify Stripe signatures and dedupe by event id",
+        "Map checkout.session.completed → active subscription",
+        "Handle invoice.payment_failed and downgrade flow",
+        "Persist subscription state with an idempotent upsert",
+      ],
+      tests: [ "billing/webhooks.test.ts", "billing/subscriptions.test.ts" ],
+      testCount: 31,
+    },
+    {
+      title: "Full-text search over documents (Postgres tsvector)",
+      files: [
+        ["src/search/index.ts", 94, 0],
+        ["src/search/query.ts", 57, 0],
+        ["src/db/migrations/0009_search.sql", 33, 0],
+        ["src/routes/api/search.ts", 45, 6],
+      ],
+      plan: [
+        "Add a generated tsvector column + GIN index",
+        "Build a ranked query with websearch_to_tsquery",
+        "Add highlight snippets via ts_headline",
+        "Expose a debounced /api/search endpoint",
+      ],
+      tests: [ "search/query.test.ts", "search/index.test.ts", "routes/search.test.ts" ],
+      testCount: 27,
+    },
+    {
+      title: "Realtime presence with WebSockets",
+      files: [
+        ["src/realtime/presence.ts", 101, 0],
+        ["src/realtime/socket.ts", 72, 14],
+        ["src/hooks/usePresence.ts", 48, 0],
+        ["src/server.ts", 16, 4],
+      ],
+      plan: [
+        "Track connected clients in a presence registry",
+        "Broadcast join/leave with a heartbeat timeout",
+        "Reconcile state on reconnect with a version vector",
+        "Add a usePresence() hook for the client",
+      ],
+      tests: [ "realtime/presence.test.ts", "realtime/socket.test.ts" ],
+      testCount: 22,
+    },
+  ];
+
+  // ---- Helper: append a line to the screen ------------------------------
+  function el(cls, html) {
+    const d = document.createElement("div");
+    d.className = "line " + (cls || "");
+    if (html !== undefined) d.innerHTML = html;
+    screen.appendChild(d);
+    scrollDown();
+    return d;
+  }
+  function raw(node) { screen.appendChild(node); scrollDown(); return node; }
+  function scrollDown() { screen.scrollTop = screen.scrollHeight; }
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  // Type text into an existing element, char-by-char.
+  async function typeInto(node, text, perChar = 14) {
+    for (let i = 0; i < text.length; i++) {
+      node.textContent += text[i];
+      if (i % 2 === 0) scrollDown();
+      await sleep(perChar + Math.random() * perChar);
+    }
+  }
+
+  // ---- Parse the time field into total seconds --------------------------
+  function parseTime(str) {
+    str = (str || "").trim();
+    let total = 0, matched = false;
+    const re = /(\d+(?:\.\d+)?)\s*(h|m|s)/gi;
+    let m;
+    while ((m = re.exec(str))) {
+      matched = true;
+      const v = parseFloat(m[1]);
+      const u = m[2].toLowerCase();
+      total += u === "h" ? v * 3600 : u === "m" ? v * 60 : v;
+    }
+    if (!matched) {
+      const n = parseFloat(str);
+      if (!isNaN(n)) total = n; // bare number = seconds
+    }
+    return Math.max(total, 4);
+  }
+
+  function fmtTime(totalSec) {
+    totalSec = Math.round(totalSec);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h) return `${h}h ${m}m ${s}s`;
+    if (m) return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
+  function parseTokens(str) {
+    str = (str || "").trim().toLowerCase().replace(/[, _]/g, "");
+    let mult = 1;
+    if (str.endsWith("k")) { mult = 1000; str = str.slice(0, -1); }
+    if (str.endsWith("m")) { mult = 1e6; str = str.slice(0, -1); }
+    const n = parseFloat(str);
+    return isNaN(n) ? 48000 : Math.round(n * mult);
+  }
+
+  const fmtNum = (n) => n.toLocaleString("en-US");
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  const SPINNERS = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+  const VERBS = ["Thinking","Pondering","Reasoning","Planning","Synthesizing",
+                 "Architecting","Composing","Reticulating","Forging","Untangling",
+                 "Considering","Deliberating","Materializing","Wrangling"];
+
+  // A live spinner line that ticks tokens/time while a phase runs.
+  function makeSpinner(verb) {
+    const node = document.createElement("div");
+    node.className = "line spinner-line";
+    const sp = document.createElement("span"); sp.className = "spinner";
+    const label = document.createElement("span");
+    const meta = document.createElement("span"); meta.className = "meta";
+    node.appendChild(sp);
+    node.appendChild(label);
+    node.appendChild(meta);
+    raw(node);
+    let i = 0;
+    const handle = setInterval(() => { sp.textContent = SPINNERS[i++ % SPINNERS.length]; }, 80);
+    return {
+      node, handle,
+      set(v, toks, secs) {
+        label.textContent = " " + v + "… ";
+        meta.textContent = `(${fmtTime(secs)} · ${fmtNum(toks)} tokens · esc to interrupt)`;
+        scrollDown();
+      },
+      stop() { clearInterval(this.handle); this.node.remove(); }
+    };
+  }
+
+  // Run a phase for a slice of the total budget, ticking the spinner.
+  async function phase(verb, durMs, tokFrom, tokTo, clock) {
+    const sp = makeSpinner(verb);
+    const steps = Math.max(6, Math.round(durMs / 110));
+    let curVerb = verb;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const toks = Math.round(tokFrom + (tokTo - tokFrom) * t);
+      const secs = clock.base + (clock.spanForVerb(verb) * t);
+      if (Math.random() < 0.22) curVerb = pick(VERBS);
+      sp.set(curVerb, toks, secs);
+      await sleep(durMs / steps);
+    }
+    sp.stop();
+  }
+
+  // ---- Main run ---------------------------------------------------------
+  async function runTask(userPrompt, isBuildNext) {
+    if (running) return;
+    running = true;
+    runBtn.disabled = true;
+    cmdInput.disabled = true;
+    stStatus.textContent = "● working";
+
+    const totalSec = parseTime(timeIn.value);
+    const totalTok = parseTokens(tokensIn.value);
+
+    const spec = SPECS[specIndex % SPECS.length];
+
+    // The on-screen prompt the user "sent".
+    let promptText = userPrompt;
+    if (!promptText) {
+      promptText = isBuildNext
+        ? "build next"
+        : `Implement: ${spec.title}`;
+    }
+    const um = el("user-msg", `<span class="prompt-mark">&gt;</span> `);
+    await typeInto(um, promptText, 10);
+
+    if (isBuildNext || /build next/i.test(promptText)) {
+      el("line muted", `Picking up the next item on the roadmap → <span class="accent">${spec.title}</span>`);
+    }
+
+    await sleep(380);
+
+    // Budget allocation across phases (compress the real-time animation so
+    // it never drags: long budgets still animate in a lively few seconds,
+    // but the REPORTED time/tokens match exactly what you entered).
+    const animTotal = Math.min(Math.max(totalSec, 5), 26) * 1000; // wall-clock anim
+    const wThink = 0.18, wPlan = 0.17, wExplore = 0.20, wBuild = 0.33, wTest = 0.12;
+
+    const clock = {
+      base: 0,
+      _verbSpan: {},
+      spanForVerb(v) { return this._verbSpan[v] || totalSec * 0.1; },
+      advance(secs) { this.base += secs; },
+    };
+
+    let tok = 0;
+    const tokFor = (w) => Math.round(totalTok * w);
+
+    // === 1. THINKING ===
+    clock._verbSpan["Thinking"] = totalSec * wThink;
+    const thoughts = [
+      "Let me look at how the codebase is structured before writing anything.",
+      "I'll keep this consistent with the existing patterns in src/.",
+      "Worth checking the migration numbering and the test conventions first.",
+    ];
+    await phase("Thinking", animTotal * wThink, tok, tok + tokFor(wThink), clock);
+    tok += tokFor(wThink); clock.advance(totalSec * wThink);
+    el("think", `✻ ${pick(thoughts)}`);
+
+    // === 2. EXPLORE (read tools) ===
+    clock._verbSpan["Reading"] = totalSec * wExplore;
+    await toolCall("Read", "package.json", `<span class="ok">Read 64 lines</span>`);
+    await toolCall("Grep", `"export (async )?function" · src/**`,
+      `<span class="ok">37 matches</span> across 14 files`);
+    await phase("Reading", animTotal * wExplore, tok, tok + tokFor(wExplore), clock);
+    tok += tokFor(wExplore); clock.advance(totalSec * wExplore);
+    await toolCall("Read", spec.files[0][0].replace(/\/[^/]+$/, "/index.ts"),
+      `<span class="ok">Read 128 lines</span>`);
+
+    // === 3. PLAN ===
+    clock._verbSpan["Planning"] = totalSec * wPlan;
+    await phase("Planning", animTotal * wPlan, tok, tok + tokFor(wPlan), clock);
+    tok += tokFor(wPlan); clock.advance(totalSec * wPlan);
+    el("line bold accent", "● Plan");
+    for (let i = 0; i < spec.plan.length; i++) {
+      el("line muted", `   ${i + 1}. ${spec.plan[i]}`);
+      await sleep(180);
+    }
+    await sleep(300);
+
+    // === 4. BUILD (edits) ===
+    clock._verbSpan["Building"] = totalSec * wBuild;
+    const perFileAnim = (animTotal * wBuild) / spec.files.length;
+    const perFileTok  = tokFor(wBuild) / spec.files.length;
+    el("line bold accent", "● Building");
+    for (const [file, add, del] of spec.files) {
+      await toolCall(
+        del > 0 ? "Edit" : "Write",
+        file,
+        `<span class="add">+${add}</span>` + (del ? ` <span class="del">-${del}</span>` : "") + ` lines`
+      );
+      await phase("Building", perFileAnim, tok, tok + perFileTok, clock);
+      tok += perFileTok;
+    }
+    clock.advance(totalSec * wBuild);
+
+    // === 5. TEST ===
+    clock._verbSpan["Testing"] = totalSec * wTest;
+    el("line bold accent", "● Running tests");
+    await toolCall("Bash", "npm test", "");
+    await phase("Testing", animTotal * wTest, tok, totalTok, clock);
+    clock.advance(totalSec * wTest);
+
+    // Per-file test results.
+    for (const f of spec.tests) {
+      el("tool-out", `<span class="test-pass">✓</span> ${f}  <span class="dim">(${Math.round(rnd(3, 11))} tests)</span>`);
+      await sleep(160);
+    }
+    const passed = spec.testCount;
+    el("tool-out",
+      `<span class="test-pass bold">Test Suites: ${spec.tests.length} passed, ${spec.tests.length} total</span>`);
+    el("tool-out",
+      `<span class="test-pass bold">Tests:       ${passed} passed, ${passed} total</span>`);
+    el("tool-out", `<span class="dim">Time:        ${(rnd(1.2, 4.8)).toFixed(2)}s</span>`);
+
+    await sleep(400);
+
+    // === SUMMARY ===
+    const totalAdd = spec.files.reduce((a, f) => a + f[1], 0);
+    const totalDel = spec.files.reduce((a, f) => a + f[2], 0);
+    const box = document.createElement("div");
+    box.className = "summary-box";
+    box.innerHTML =
+      `<div class="row"><span class="k">● Task complete</span><span class="v accent bold">${spec.title}</span></div>` +
+      `<div class="row"><span class="k">  Duration</span><span class="v">${fmtTime(totalSec)}</span></div>` +
+      `<div class="row"><span class="k">  Tokens used</span><span class="v">${fmtNum(totalTok)} <span class="dim">(${fmtNum(Math.round(totalTok*0.82))} in · ${fmtNum(Math.round(totalTok*0.18))} out)</span></span></div>` +
+      `<div class="row"><span class="k">  Files changed</span><span class="v">${spec.files.length} <span class="add">+${totalAdd}</span> <span class="del">-${totalDel}</span></span></div>` +
+      `<div class="row"><span class="k">  Tests</span><span class="v test-pass">${passed}/${passed} passing ✓</span></div>` +
+      `<div class="row"><span class="k">  Cost</span><span class="v">$${(totalTok/1e6*7.5).toFixed(2)}</span></div>`;
+    raw(box);
+
+    el("line dim", `Type <span class="bold accent">build next</span> to implement the next spec → <span class="muted">${SPECS[(specIndex+1)%SPECS.length].title}</span>`);
+
+    // Advance roadmap + update status.
+    specIndex++;
+    const ctxPct = Math.min(94, 12 + specIndex * 14);
+    stCtx.textContent = `◇ context: ${ctxPct}% used`;
+    stStatus.textContent = "● ready";
+
+    running = false;
+    runBtn.disabled = false;
+    cmdInput.disabled = false;
+    cmdInput.focus();
+  }
+
+  // ---- A tool-call block (⏺ Name(args) → output) ------------------------
+  async function toolCall(name, args, outHtml) {
+    const t = document.createElement("div");
+    t.className = "line tool";
+    t.innerHTML = `<span class="mark">⏺</span> <span class="name">${name}</span><span class="args">(${args})</span>`;
+    raw(t);
+    await sleep(rnd(140, 320));
+    if (outHtml) {
+      const o = document.createElement("div");
+      o.className = "line tool-out";
+      o.innerHTML = "⎿ " + outHtml;
+      raw(o);
+    }
+    await sleep(rnd(80, 180));
+  }
+
+  // ---- Wiring -----------------------------------------------------------
+  runBtn.addEventListener("click", () => runTask(null, false));
+
+  cmdInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !running) {
+      const v = cmdInput.value.trim();
+      cmdInput.value = "";
+      if (!v) { runTask(null, false); return; }
+      const isNext = /^\s*build\s+next\s*$/i.test(v);
+      runTask(isNext ? null : v, isNext);
+    }
+  });
+
+  cmdInput.focus();
+})();
+</script>
+</body>
+</html>
