@@ -211,11 +211,15 @@
   }
   #cmd::placeholder { color: var(--dim); }
 
+  .toppanel {
+    background: linear-gradient(180deg, #1f1812, #1a140f);
+    border-bottom: 1px solid var(--border);
+    padding: 11px 16px;
+  }
   .controls {
     display: flex;
     gap: 14px;
     align-items: center;
-    margin-bottom: 10px;
     flex-wrap: wrap;
   }
   .field {
@@ -275,6 +279,21 @@
       <span class="badge">claude-opus-4-8</span>
     </div>
 
+    <div class="toppanel">
+      <div class="controls">
+        <div class="field">
+          <label>⏱ time</label>
+          <input id="time" type="text" value="6m 12s" />
+        </div>
+        <div class="field">
+          <label>◇ tokens</label>
+          <input id="tokens" type="text" value="48200" />
+        </div>
+        <button class="run-btn" id="run">▶ Run task</button>
+        <span class="hint">type a prompt &amp; Enter below · or "build next"</span>
+      </div>
+    </div>
+
     <div class="screen" id="screen">
       <div class="welcome">
         <h1><span class="star">✻</span> Welcome to <span class="accent">Claude Code</span></h1>
@@ -286,18 +305,6 @@
     </div>
 
     <div class="inputbar">
-      <div class="controls">
-        <div class="field">
-          <label>⏱ time</label>
-          <input id="time" type="text" value="6m 12s" />
-        </div>
-        <div class="field">
-          <label>◇ tokens</label>
-          <input id="tokens" type="text" value="48200" />
-        </div>
-        <button class="run-btn" id="run">▶ Run task</button>
-        <span class="hint">type a prompt &amp; Enter · or "build next"</span>
-      </div>
       <div class="input-row">
         <span class="gt">&gt;</span>
         <input id="cmd" type="text" autocomplete="off" spellcheck="false"
